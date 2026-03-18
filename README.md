@@ -2,7 +2,7 @@
 
 This is a standalone Fabric client mod that streams real Minecraft client view frames over WebSocket.
 
-A plugin for [anima-bot](https://github.com/bear0131/anima-bot).
+Here is a [branch](https://github.com/SampsonYW/observer-client/tree/animabot-observer) for [anima-bot](https://github.com/bear0131/anima-bot).
 
 ## What it does
 
