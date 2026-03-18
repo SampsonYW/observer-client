@@ -2,6 +2,8 @@
 
 This is a standalone Fabric client mod that streams real Minecraft client view frames over WebSocket.
 
+A plugin for [anima-bot](https://github.com/bear0131/anima-bot).
+
 ## What it does
 
 - Connects to a local WebSocket server (`/ws/vision` by default)
@@ -13,7 +15,7 @@ This is a standalone Fabric client mod that streams real Minecraft client view f
 
 ## Environment variables
 
-- `OBS_WS_URL` (default: `ws://127.0.0.1:8000/ws/vision`)
+- `OBS_WS_URL` (default: `ws://127.0.0.1:18000/ws/vision`)
 - `OBS_TARGET_BOT` (default: `animabot`)
 - `OBS_FPS` (default: `60`)
 - `OBS_FRAME_WIDTH` (default: `1920`)
