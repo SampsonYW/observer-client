@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "visionobserver",
+  "version": "${version}",
+  "name": "Vision Observer",
+  "description": "Real-client observer stream for anima-bot",
+  "authors": [
+    "anima-bot"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.animabot.visionobserver.VisionObserverMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": "1.18.2",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}
