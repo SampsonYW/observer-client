@@ -47,7 +47,7 @@ public final class ObserverConfig {
 
     public static ObserverConfig fromEnv() {
         return new ObserverConfig(
-                env("OBS_WS_URL", "ws://127.0.0.1:18000/ws/vision"),
+                env("OBS_WS_URL", "ws://127.0.0.1:8000/ws/vision"),
                 env("OBS_TARGET_BOT", "animabot"),
                 parseInt(env("OBS_FPS", "60"), 60, 1, 60),
                 parseInt(env("OBS_FRAME_WIDTH", "1920"), 1920, 160, 3840),
