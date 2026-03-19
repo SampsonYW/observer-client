@@ -123,6 +123,34 @@ If the observer can connect and packets arrive, the standalone client pipeline i
 
 Note: the main anima-bot backend uses port 8000 by default. The mock server intentionally uses 18000 to avoid conflicts with `python -m agent.core`.
 
+## Replace screenshot_front in main backend
+
+If you want observer front view to replace `screenshot_front` in anima-bot backend:
+
+1. Start backend:
+
+python -m agent.core
+
+2. Make observer connect to backend (port 8000), not mock (18000):
+
+PowerShell:
+
+$env:OBS_WS_URL="ws://127.0.0.1:8000/ws/vision"
+
+CMD:
+
+set OBS_WS_URL=ws://127.0.0.1:8000/ws/vision
+
+Bash:
+
+export OBS_WS_URL=ws://127.0.0.1:8000/ws/vision
+
+3. Run observer client:
+
+gradle runClient
+
+4. Open anima-bot frontend and verify `screenshot_front` updates from observer stream.
+
 Before launching the client, make sure:
 
 - your Minecraft server is running
