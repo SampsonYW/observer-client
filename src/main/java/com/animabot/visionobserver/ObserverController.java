@@ -16,6 +16,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import net.minecraft.client.option.Perspective;
+import com.google.gson.JsonArray;
+
 public class ObserverController {
     private static final Logger LOGGER = LoggerFactory.getLogger("ObserverController");
 
@@ -38,6 +41,9 @@ public class ObserverController {
     private long nextStatusAtMs;
     private long nextCaptureAtNs;
     private long dimensionSettleUntilMs;
+
+    private int captureStage = 0; // 0:空闲, 1:拍第一人称, 2:拍正面, 3:拍背面
+    private NativeImage[] pendingFrames = new NativeImage[3];
 
     public ObserverController(ObserverConfig config, VisionWsClient wsClient) {
         this.config = config;
@@ -114,8 +120,34 @@ public class ObserverController {
         long ts = System.currentTimeMillis();
         String dimension = currentDimension;
 
-        NativeImage frame = ScreenshotRecorder.takeScreenshot(client.getFramebuffer());
-        encoderExecutor.submit(() -> encodeAndSendFrame(frame, ts, cameraBound, dimension));
+        if (captureStage == 0) {
+            // 第二阶段：此时画面已经是第一人称，截图并切到正面
+            pendingFrames[0] = ScreenshotRecorder.takeScreenshot(client.getFramebuffer());
+            
+            client.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+            captureStage = 1;
+            encoderBusy.set(false);
+        }
+        else if (captureStage == 1) {
+            // 第三阶段：此时画面是正面，截图并切到背面
+            pendingFrames[1] = ScreenshotRecorder.takeScreenshot(client.getFramebuffer());
+            
+            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+            captureStage = 2;
+            encoderBusy.set(false);
+        }
+        else if (captureStage == 2) {
+            // 第四阶段：此时画面是背面，截图，打包发送并还原视角
+            pendingFrames[2] = ScreenshotRecorder.takeScreenshot(client.getFramebuffer());
+            
+            NativeImage[] finalFrames = new NativeImage[]{ pendingFrames[0], pendingFrames[1], pendingFrames[2] };
+            encoderExecutor.submit(() -> encodeAndSendFrames(finalFrames, System.currentTimeMillis(), cameraBound, dimension));
+            
+            // 还原视角
+            client.options.setPerspective(Perspective.FIRST_PERSON);
+            captureStage = 0;
+            // 注意：这里才算真正完成一次抓取任务，重置 nextCaptureAtNs
+        }
     }
 
     public void shutdown() {
@@ -225,38 +257,63 @@ public class ObserverController {
         return Math.min(config.backoffMaxMs, Math.max(config.fastRetryMs, delay));
     }
 
-    private void encodeAndSendFrame(NativeImage frame, long ts, boolean cameraBound, String dimension) {
+    private void encodeAndSendFrames(NativeImage[] frames, long ts, boolean cameraBound, String dimension) {
         try {
-            FrameEncoder.EncodedFrame encoded = FrameEncoder.encodeToJpegBase64(
-                    frame,
-                    config.frameWidth,
-                    config.frameHeight,
-                    config.jpegQuality
-            );
+            JsonArray framesArray = new JsonArray();
 
+            // 遍历处理这三个视角（frame1, frame2, frame3）
+            for (NativeImage frame : frames) {
+                if (frame == null) continue;
+
+                // 执行 JPEG 编码
+                FrameEncoder.EncodedFrame encoded = FrameEncoder.encodeToJpegBase64(
+                        frame,
+                        config.frameWidth,
+                        config.frameHeight,
+                        config.jpegQuality
+                );
+
+                // 封装单张图片数据
+                JsonObject frameObj = new JsonObject();
+                frameObj.addProperty("jpeg_base64", encoded.base64);
+                frameObj.addProperty("width", encoded.width);
+                frameObj.addProperty("height", encoded.height);
+                
+                framesArray.add(frameObj);
+            }
+
+            // 构建核心外壳
             JsonObject root = new JsonObject();
             root.addProperty("source", "client_vision");
-            root.addProperty("type", "vision_frame");
+            root.addProperty("type", "vision_frame_batch"); // 标记为多图批处理模式
 
             JsonObject content = new JsonObject();
             content.addProperty("session_id", wsClient.getSessionId());
             content.addProperty("ts", ts);
-            content.addProperty("jpeg_base64", encoded.base64);
-            content.addProperty("width", encoded.width);
-            content.addProperty("height", encoded.height);
             content.addProperty("target_name", config.targetBotName);
             content.addProperty("camera_bound", cameraBound);
             content.addProperty("dimension", dimension);
+            
+            // 关键：将所有图片放进 frames 数组中
+            content.add("frames", framesArray);
             root.add("content", content);
 
+            // 发送打包后的 JSON
             if (wsClient.sendJson(root.toString())) {
                 lastFrameSentAtMs = ts;
             }
+
         } catch (Exception ex) {
-            LOGGER.warn("Failed to encode/send frame: {}", ex.getMessage());
-            sendEvent("error", "frame_send_failed", ex.getMessage());
+            LOGGER.warn("Failed to encode/send frames bundle: {}", ex.getMessage());
+            sendEvent("error", "bundle_send_failed", ex.getMessage());
         } finally {
-            frame.close();
+            // 依次关闭所有 NativeImage 释放堆外内存
+            for (NativeImage frame : frames) {
+                if (frame != null) {
+                    frame.close();
+                }
+            }
+            // 编码器任务结束，重置忙碌状态
             encoderBusy.set(false);
         }
     }
